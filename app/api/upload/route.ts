@@ -4,6 +4,9 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { getSupabaseServerClient } from "@/src/lib/supabase";
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const pdfParse = require("pdf-parse");
+
 function sanitizeFileName(name: string) {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
@@ -20,6 +23,34 @@ function isPdfFile(file: File, bytes: Uint8Array) {
     bytes[4] === 0x2d;
 
   return (isPdfMime || isPdfExtension) && isPdfMagicHeader;
+}
+function splitIntoChunks(text: string, maxWords = 250) {
+  const sentences = text
+    .replace(/\n+/g, " ")
+    .split(/(?<=[.!?])\s+/);
+
+  const chunks: string[] = [];
+  let currentChunk = "";
+  let currentWordCount = 0;
+
+  for (const sentence of sentences) {
+    const words = sentence.trim().split(/\s+/);
+
+    if (currentWordCount + words.length <= maxWords) {
+      currentChunk += sentence + " ";
+      currentWordCount += words.length;
+    } else {
+      chunks.push(currentChunk.trim());
+      currentChunk = sentence + " ";
+      currentWordCount = words.length;
+    }
+  }
+
+  if (currentChunk.trim()) {
+    chunks.push(currentChunk.trim());
+  }
+
+  return chunks;
 }
 
 export async function POST(req: Request) {
@@ -44,9 +75,35 @@ export async function POST(req: Request) {
       );
     }
 
-    const buffer = Buffer.from(arrayBuffer);
-    const uniqueName = `${Date.now()}-${randomUUID()}-${sanitizeFileName(file.name)}`;
+    // const buffer = Buffer.from(arrayBuffer);
+    // const uniqueName = `${Date.now()}-${randomUUID()}-${sanitizeFileName(file.name)}`;
 
+    const buffer = Buffer.from(arrayBuffer);
+
+    // Extract text from PDF
+    // const pdfData = await pdfParse(buffer);
+    // const extractedText = pdfData.text;
+
+    // console.log("===== Extracted PDF Text =====");
+    // console.log(extractedText);
+    // console.log("==============================");
+    const pdfData = await pdfParse(buffer);
+    const extractedText = pdfData.text;
+
+    // Split text into chunks
+    const chunks = splitIntoChunks(extractedText);
+
+    console.log("========== PDF CHUNKS ==========");
+
+    chunks.forEach((chunk, index) => {
+      console.log(`Chunk ${index + 1}`);
+      console.log(chunk);
+      console.log("--------------------------------");
+    });
+
+    console.log("================================");
+
+    const uniqueName = `${Date.now()}-${randomUUID()}-${sanitizeFileName(file.name)}`;
     const supabase = getSupabaseServerClient();
 
     if (supabase) {
@@ -63,6 +120,8 @@ export async function POST(req: Request) {
           message: "File uploaded successfully",
           storage: "supabase",
           savedPath: `documents/${data.path}`,
+          text: extractedText,
+          chunks,
         });
       }
     }
@@ -77,13 +136,16 @@ export async function POST(req: Request) {
       message: "File saved to temporary server storage",
       storage: "local-temp",
       savedPath: localPath,
+      text: extractedText,
+      chunks,
     });
+
   } catch (error) {
     console.error("Upload failed:", error);
 
     return NextResponse.json(
       {
-        error: "Something went wrong",
+        error: error instanceof Error ? error.message : "Something went wrong",
       },
       { status: 500 }
     );
