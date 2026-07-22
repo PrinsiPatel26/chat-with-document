@@ -172,6 +172,7 @@ export default function Home() {
     {
       fileName: string;
       text: string;
+      chunks: string[];
     }[]
   >([]);
 
@@ -199,6 +200,7 @@ export default function Home() {
         {
           fileName: file.name,
           text: result.text,
+          chunks: result.chunks ?? [],
         },
       ]);
 
@@ -294,6 +296,28 @@ export default function Home() {
                 <div className="max-h-80 overflow-y-auto whitespace-pre-wrap rounded border bg-white p-4 text-gray-700">
                   {pdf.text}
                 </div>
+
+                {pdf.chunks.length > 0 && (
+                  <div className="mt-5">
+                    <h4 className="mb-3 font-semibold text-gray-800">
+                      Chunks ({pdf.chunks.length}):
+                    </h4>
+
+                    <div className="space-y-3">
+                      {pdf.chunks.map((chunk, chunkIndex) => (
+                        <div
+                          key={chunkIndex}
+                          className="rounded border border-blue-200 bg-blue-50 p-3 text-sm text-gray-700"
+                        >
+                          <p className="mb-1 font-semibold text-blue-700">
+                            Chunk {chunkIndex + 1}
+                          </p>
+                          <p className="whitespace-pre-wrap">{chunk}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <hr className="mt-6 border-2 border-blue-400" />
               </div>

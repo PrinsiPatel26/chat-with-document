@@ -3,6 +3,11 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { getSupabaseServerClient } from "@/src/lib/supabase";
+import { GoogleGenAI } from "@google/genai";
+
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY!,
+});
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pdfParse = require("pdf-parse");
@@ -90,8 +95,35 @@ export async function POST(req: Request) {
     const pdfData = await pdfParse(buffer);
     const extractedText = pdfData.text;
 
+    console.log("========== PDF EXTRACTED TEXT ==========");
+    console.log(extractedText);
+    console.log("=======================================");
+
     // Split text into chunks
     const chunks = splitIntoChunks(extractedText);
+    const chunkEmbeddings = [];
+
+for (const chunk of chunks) {
+  const response = await ai.models.embedContent({
+    model: "gemini-embedding-001",
+    contents: chunk,
+  });
+
+  const embedding = response.embeddings?.[0]?.values;
+
+  chunkEmbeddings.push({
+    chunk,
+    embedding,
+  });
+}
+console.log("===== EMBEDDINGS =====");
+
+chunkEmbeddings.forEach((item, index) => {
+  console.log(`Chunk ${index + 1}`);
+  console.log("Embedding Length:", item.embedding?.length);
+});
+
+console.log("======================");
 
     console.log("========== PDF CHUNKS ==========");
 
@@ -102,6 +134,7 @@ export async function POST(req: Request) {
     });
 
     console.log("================================");
+    console.log(`Chunk count: ${chunks.length}`);
 
     const uniqueName = `${Date.now()}-${randomUUID()}-${sanitizeFileName(file.name)}`;
     const supabase = getSupabaseServerClient();
@@ -122,6 +155,8 @@ export async function POST(req: Request) {
           savedPath: `documents/${data.path}`,
           text: extractedText,
           chunks,
+          chunkEmbeddings,
+
         });
       }
     }
