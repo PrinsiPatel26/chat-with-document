@@ -148,10 +148,10 @@ export async function POST(req: Request) {
       );
 
      if (error) {
-  console.error("❌ Supabase Insert Error:", error);
+  console.error("Supabase Insert Error:", error);
   warnings.push(`Failed to save chunk embeddings in Supabase: ${error.message}`);
 } else {
-  console.log("✅ Chunk embeddings saved successfully.");
+  console.log(" Chunk embeddings saved successfully.");
 }
     }
 
