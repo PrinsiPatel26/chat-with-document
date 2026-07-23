@@ -101,9 +101,24 @@ export default function Home() {
         ...prev,
         { role: "assistant", content: "Failed to connect to server" },
       ]);
+    } finally {
+      setLoading(false);
     }
+  }
 
+  function clearChat() {
+    setQuestion("");
     setLoading(false);
+    setMessages([]);
+  }
+
+  function newDocument() {
+    setFile(null);
+    setMessage("");
+    setQuestion("");
+    setLoading(false);
+    setMessages([]);
+    setUploadedFiles([]);
   }
 
   return (
@@ -151,6 +166,7 @@ export default function Home() {
         )}
 
         <button
+          type="button"
           onClick={uploadFile}
           className="w-full rounded bg-blue-600 py-3 text-white hover:bg-blue-700"
         >
@@ -158,9 +174,37 @@ export default function Home() {
         </button>
 
         {message && (
-          <p className="mt-4 text-center font-semibold text-green-600">
-            {message}
-          </p>
+          <div className="mt-5 rounded-xl border border-green-200 bg-green-50 p-4 shadow-sm">
+            <p className="text-sm text-gray-500">Uploaded Document</p>
+
+            <h3 className="mt-1 text-lg font-semibold text-blue-700">
+              📄 {uploadedFiles[uploadedFiles.length - 1]?.fileName}
+            </h3>
+
+            <p className="mt-2 font-medium text-green-600">
+              ✅ Uploaded Successfully
+            </p>
+          </div>
+        )}
+
+        {uploadedFiles.length > 0 && (
+          <div className="mt-4 flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={clearChat}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+            >
+              🧹 Clear Chat
+            </button>
+
+            <button
+              type="button"
+              onClick={newDocument}
+              className="rounded-lg bg-red-500 px-4 py-2 text-white hover:bg-red-600"
+            >
+              🗑️ New Document
+            </button>
+          </div>
         )}
 
         {uploadedFiles.length > 0 && (
@@ -216,7 +260,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* Chat Section */}
         <div className="mt-10 border-t pt-8">
           <h2 className="mb-5 text-center text-2xl font-bold">
             Chat With Your PDF
@@ -250,8 +293,9 @@ export default function Home() {
 
             {loading && (
               <div className="flex justify-start">
-                <div className="rounded-2xl bg-gray-200 px-4 py-3 text-sm text-gray-900 shadow">
-                  Thinking...
+                <div className="flex items-center gap-3 rounded-2xl bg-gray-200 px-4 py-3 text-sm text-gray-900 shadow">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></div>
+                  <span>AI is analyzing your document...</span>
                 </div>
               </div>
             )}
@@ -272,6 +316,7 @@ export default function Home() {
           )}
 
           <button
+            type="button"
             onClick={askQuestion}
             disabled={loading}
             className="mt-4 w-full rounded bg-green-600 py-3 text-white hover:bg-green-700 disabled:bg-gray-400"
