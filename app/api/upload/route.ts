@@ -5,12 +5,17 @@ import { randomUUID } from "node:crypto";
 import { getSupabaseServerClient } from "@/src/lib/supabase";
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY!,
-});
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pdfParse = require("pdf-parse");
+
+const geminiApiKey = process.env.GEMINI_API_KEY;
+const ai = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
+
+type ChunkEmbedding = {
+  chunk: string;
+  embedding: number[];
+};
 
 function sanitizeFileName(name: string) {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -58,6 +63,10 @@ function splitIntoChunks(text: string, maxWords = 250) {
   return chunks;
 }
 
+function formatEmbeddingForPgvector(embedding: number[]) {
+  return `[${embedding.join(",")}]`;
+}
+
 export async function POST(req: Request) {
   try {
     const formData = await req.formData();
@@ -94,36 +103,61 @@ export async function POST(req: Request) {
     // console.log("==============================");
     const pdfData = await pdfParse(buffer);
     const extractedText = pdfData.text;
+    const chunks = splitIntoChunks(extractedText);
+
+    const uniqueName = `${Date.now()}-${randomUUID()}-${sanitizeFileName(file.name)}`;
+    const supabase = getSupabaseServerClient();
+    const chunkEmbeddings: ChunkEmbedding[] = [];
+    const warnings: string[] = [];
+
+    if (!ai) {
+      return NextResponse.json(
+        { error: "GEMINI_API_KEY is not configured" },
+        { status: 500 }
+      );
+    }
+
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+
+      const response = await ai.models.embedContent({
+        model: "gemini-embedding-001",
+        contents: chunk,
+      });
+
+      const embedding = response.embeddings?.[0]?.values;
+
+      if (!embedding) {
+        throw new Error(`Failed to generate embedding for chunk ${i + 1}`);
+      }
+
+      chunkEmbeddings.push({
+        chunk,
+        embedding,
+      });
+    }
+
+    if (supabase && chunkEmbeddings.length > 0) {
+      const { error } = await supabase.from("document_chunks").insert(
+        chunkEmbeddings.map((item, index) => ({
+          document_name: file.name,
+          chunk_index: index,
+          chunk_text: item.chunk,
+          embedding: formatEmbeddingForPgvector(item.embedding),
+        }))
+      );
+
+     if (error) {
+  console.error("❌ Supabase Insert Error:", error);
+  warnings.push(`Failed to save chunk embeddings in Supabase: ${error.message}`);
+} else {
+  console.log("✅ Chunk embeddings saved successfully.");
+}
+    }
 
     console.log("========== PDF EXTRACTED TEXT ==========");
     console.log(extractedText);
     console.log("=======================================");
-
-    // Split text into chunks
-    const chunks = splitIntoChunks(extractedText);
-    const chunkEmbeddings = [];
-
-for (const chunk of chunks) {
-  const response = await ai.models.embedContent({
-    model: "gemini-embedding-001",
-    contents: chunk,
-  });
-
-  const embedding = response.embeddings?.[0]?.values;
-
-  chunkEmbeddings.push({
-    chunk,
-    embedding,
-  });
-}
-console.log("===== EMBEDDINGS =====");
-
-chunkEmbeddings.forEach((item, index) => {
-  console.log(`Chunk ${index + 1}`);
-  console.log("Embedding Length:", item.embedding?.length);
-});
-
-console.log("======================");
 
     console.log("========== PDF CHUNKS ==========");
 
@@ -136,8 +170,14 @@ console.log("======================");
     console.log("================================");
     console.log(`Chunk count: ${chunks.length}`);
 
-    const uniqueName = `${Date.now()}-${randomUUID()}-${sanitizeFileName(file.name)}`;
-    const supabase = getSupabaseServerClient();
+    console.log("===== EMBEDDINGS =====");
+
+    chunkEmbeddings.forEach((item, index) => {
+      console.log(`Chunk ${index + 1}`);
+      console.log("Embedding Length:", item.embedding.length);
+    });
+
+    console.log("======================");
 
     if (supabase) {
       const { data, error } = await supabase.storage
@@ -150,14 +190,18 @@ console.log("======================");
       if (!error && data?.path) {
         return NextResponse.json({
           success: true,
-          message: "File uploaded successfully",
+          message: "File uploaded successfully and embeddings stored",
           storage: "supabase",
           savedPath: `documents/${data.path}`,
           text: extractedText,
           chunks,
           chunkEmbeddings,
-
+          warnings,
         });
+      }
+
+      if (error) {
+        warnings.push(`Supabase file upload failed: ${error.message}`);
       }
     }
 
@@ -168,11 +212,13 @@ console.log("======================");
 
     return NextResponse.json({
       success: true,
-      message: "File saved to temporary server storage",
+      message: "File processed successfully",
       storage: "local-temp",
       savedPath: localPath,
       text: extractedText,
       chunks,
+      chunkEmbeddings,
+      warnings,
     });
 
   } catch (error) {
