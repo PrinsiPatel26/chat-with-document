@@ -178,7 +178,7 @@ export default function Home() {
             <p className="text-sm text-gray-500">Uploaded Document</p>
 
             <h3 className="mt-1 text-lg font-semibold text-blue-700">
-              📄 {uploadedFiles[uploadedFiles.length - 1]?.fileName}
+               {uploadedFiles[uploadedFiles.length - 1]?.fileName}
             </h3>
 
             <p className="mt-2 font-medium text-green-600">
@@ -194,7 +194,7 @@ export default function Home() {
               onClick={clearChat}
               className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
             >
-              🧹 Clear Chat
+               Clear Chat
             </button>
 
             <button
@@ -202,7 +202,7 @@ export default function Home() {
               onClick={newDocument}
               className="rounded-lg bg-red-500 px-4 py-2 text-white hover:bg-red-600"
             >
-              🗑️ New Document
+              New Document
             </button>
           </div>
         )}
